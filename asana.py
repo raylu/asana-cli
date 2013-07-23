@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # vim: set sw=4 ts=4:
 
+from fabric import colors
+import operator
 import os.path
 import requests
 import readline
@@ -23,11 +25,13 @@ class API(object):
         return self.__make_req('workspaces', str(workspace_id), 'projects')
     def tasks(self, project_id=None, workspace_id=None):
         if project_id is not None:
-            return self.__make_req('projects', str(project_id), 'tasks')
+            tasks = self.__make_req('projects', str(project_id), 'tasks', opt_fields='name,completed')
         elif workspace_id is not None:
-            return self.__make_req('workspaces', str(workspace_id), 'tasks', assignee='me')
+            tasks = self.__make_req('workspaces', str(workspace_id), 'tasks', assignee='me', opt_fields='name,completed')
         else:
             raise ValueError('must pass one of project_id, workspace_id')
+        tasks.sort(key=operator.itemgetter('completed'), reverse=True)
+        return tasks
     def task(self, task_id):
         task = self.__make_req('tasks', str(task_id))
         stories = self.__make_req('tasks', str(task_id), 'stories')
@@ -70,20 +74,34 @@ class Shell(object):
                 print p['name']
         elif pwd_len == self.TASKS:
             for t in self.path[self.TASKS]:
-                print t['name']
+                if t['completed']:
+                    print '\t' + colors.green(t['name'])
+                elif t['name'].endswith(':'):
+                    print colors.yellow(t['name'])
+                else:
+                    print '\t' + t['name']
         elif pwd_len == self.TASK:
             task = self.path[self.TASK]
             print task['name']
             if task['completed']:
-                print 'completed'
-            print 'assignee', task['assignee']
-            print 'notes:', task['notes']
-            print 'due on:', task['due_on']
-            print 'comments:'
+                print colors.green('completed')
+            if task['assignee']:
+                print colors.yellow('assignee:'), task['assignee']['name']
+            else:
+                print colors.yellow('assignee:'), task['assignee']
+            print colors.yellow('notes:'), task['notes']
+            print colors.yellow('due on:'), task['due_on']
+            print colors.yellow('comments:')
             for s in task['stories']:
-                print s['created_by']['name'], s['created_at']
-                print '\t' + s['text']
-            print 'followers:'
+                if s['type'] == 'system':
+                    line = '{} {} {}'.format(s['created_by']['name'], s['text'], s['created_at'])
+                    print colors.magenta(line)
+                elif s['type'] == 'comment':
+                    print colors.blue('{} {}'.format(s['created_by']['name'], s['created_at']))
+                    print '\t' + s['text']
+                else:
+                    raise RuntimeError('unhandled story type: ' + s['type'])
+            print colors.yellow('followers:')
             for f in task['followers']:
                 print '\t' + f['name']
         else:
@@ -91,7 +109,8 @@ class Shell(object):
 
     def prompt(self):
         pwd_len = len(self.pwd)
-        line = raw_input(', '.join(map(str, self.pwd)) + '> ')
+        prompt = ', '.join(map(str, self.pwd)) + '> '
+        line = raw_input(colors.cyan(prompt))
         split = line.split(' ', 1)
         command = split[0]
         if command == 'cl':
@@ -102,6 +121,7 @@ class Shell(object):
                     if w['name'] == split[1]:
                         self.pwd.append(w['id'])
                         projects = self.api.projects(w['id'])
+                        print projects
                         self.path[self.PROJECTS] = projects
                         break
                 else:
