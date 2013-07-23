@@ -30,15 +30,15 @@ class API(object):
 class Shell(object):
     def __init__(self, api_key):
         self.api = API(api_key)
-        self.workspaces = None
-        self.tasks = None
         self.pwd = []
+        self.path = []
 
         readline.set_completer(self.complete)
         readline.set_completer_delims('')
         readline.parse_and_bind('tab: complete')
 
     def run(self):
+        self.path.append(self.api.workspaces())
         self.display()
         try:
             while True:
@@ -50,27 +50,25 @@ class Shell(object):
     def display(self):
         pwd_len = len(self.pwd)
         if pwd_len == 0:
-            self.workspaces = self.api.workspaces()
-            for w in self.workspaces:
+            for w in self.path[0]:
                 print w['name']
         elif pwd_len == 1:
-            self.tasks = self.api.tasks(self.pwd[0])
-            for t in self.tasks:
+            for t in self.path[1]:
                 print t['name']
         elif pwd_len == 2:
-            self.task = self.api.task(self.pwd[1])
-            print self.task['name']
-            if self.task['completed']:
+            task = self.path[2]
+            print task['name']
+            if task['completed']:
                 print 'completed'
-            print 'assignee', self.task['assignee']
-            print 'notes:', self.task['notes']
-            print 'due on:', self.task['due_on']
+            print 'assignee', task['assignee']
+            print 'notes:', task['notes']
+            print 'due on:', task['due_on']
             print 'comments:'
-            for s in self.task['stories']:
+            for s in task['stories']:
                 print s['created_by']['name'], s['created_at']
                 print '\t' + s['text']
             print 'followers:'
-            for f in self.task['followers']:
+            for f in task['followers']:
                 print '\t' + f['name']
         else:
             raise RuntimeError('unhandled working directory depth')
@@ -82,16 +80,20 @@ class Shell(object):
         command = split[0]
         if command == 'cl':
             if pwd_len == 0:
-                for w in self.workspaces:
+                for w in self.path[0]:
                     if w['name'] == split[1]:
                         self.pwd.append(w['id'])
+                        tasks = self.api.tasks(w['id'])
+                        self.path.append(tasks)
                         break
                 else:
                     print 'could not find that workspace'
             elif pwd_len == 1:
-                for t in self.tasks:
+                for t in self.path[1]:
                     if t['name'] == split[1]:
                         self.pwd.append(t['id'])
+                        task = self.api.task(t['id'])
+                        self.path.append(task)
                         break
                 else:
                     print 'could not find that task'
@@ -109,19 +111,12 @@ class Shell(object):
             return
         ltext = text[3:].lower()
         match = 0
-        pwd_len = len(self.pwd)
-        if pwd_len == 0:
-            for w in self.workspaces:
-                if ltext in w['name'].lower():
-                    if match == state:
-                        return 'cl ' + w['name']
-                    match += 1
-        elif pwd_len == 1:
-            for t in self.tasks:
-                if ltext in t['name'].lower():
-                    if match == state:
-                        return 'cl ' + t['name']
-                    match += 1
+        search_list = self.path[len(self.pwd)]
+        for item in search_list:
+            if ltext in item['name'].lower():
+                if match == state:
+                    return 'cl ' + item['name']
+                match += 1
 
 if __name__ == '__main__':
     if os.path.exists('api_key'):
