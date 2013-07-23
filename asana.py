@@ -41,34 +41,21 @@ class Shell(object):
     def run(self):
         try:
             while True:
+                self.display()
                 self.prompt()
         except EOFError:
             print
 
-    def prompt(self):
+    def display(self):
         pwd_len = len(self.pwd)
         if pwd_len == 0:
             self.workspaces = self.api.workspaces()
             for w in self.workspaces:
                 print w['name']
-            w_name = raw_input('> ')
-            for w in self.workspaces:
-                if w['name'] == w_name:
-                    self.pwd.append(w['id'])
-                    break
-            else:
-                print('could not find that workspace')
         elif pwd_len == 1:
             self.tasks = self.api.tasks(self.pwd[0])
             for t in self.tasks:
                 print t['name']
-            t_name = raw_input(', '.join(map(str, self.pwd)) + '> ')
-            for t in self.tasks:
-                if t['name'] == t_name:
-                    self.pwd.append(t['id'])
-                    break
-            else:
-                print('could not find that task')
         elif pwd_len == 2:
             self.task = self.api.task(self.pwd[1])
             print self.task['name']
@@ -84,7 +71,30 @@ class Shell(object):
             print 'followers:'
             for f in self.task['followers']:
                 print '\t' + f['name']
-            raw_input()
+        else:
+            raise RuntimeError('unhandled working directory depth')
+
+    def prompt(self):
+        pwd_len = len(self.pwd)
+        command = raw_input(', '.join(map(str, self.pwd)) + '> ')
+        if pwd_len == 0:
+            w_name = command
+            for w in self.workspaces:
+                if w['name'] == w_name:
+                    self.pwd.append(w['id'])
+                    break
+            else:
+                print('could not find that workspace')
+        elif pwd_len == 1:
+            t_name = command
+            for t in self.tasks:
+                if t['name'] == t_name:
+                    self.pwd.append(t['id'])
+                    break
+            else:
+                print('could not find that task')
+        elif pwd_len == 2:
+            pass
         else:
             raise RuntimeError('unhandled working directory depth')
 
