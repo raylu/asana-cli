@@ -19,8 +19,15 @@ class API(object):
 
     def workspaces(self):
         return self.__make_req('workspaces')
-    def tasks(self, workspace_id):
-        return self.__make_req('workspaces', str(workspace_id), 'tasks', assignee='me')
+    def projects(self, workspace_id):
+        return self.__make_req('workspaces', str(workspace_id), 'projects')
+    def tasks(self, project_id=None, workspace_id=None):
+        if project_id is not None:
+            return self.__make_req('projects', str(project_id), 'tasks')
+        elif workspace_id is not None:
+            return self.__make_req('workspaces', str(workspace_id), 'tasks', assignee='me')
+        else:
+            raise ValueError('must pass one of project_id, workspace_id')
     def task(self, task_id):
         task = self.__make_req('tasks', str(task_id))
         stories = self.__make_req('tasks', str(task_id), 'stories')
@@ -28,10 +35,15 @@ class API(object):
         return task
 
 class Shell(object):
+    WORKSPACES = 0
+    PROJECTS = 1
+    TASKS = 2
+    TASK = 3
+
     def __init__(self, api_key):
         self.api = API(api_key)
         self.pwd = []
-        self.path = [None, None, None] # workspace, tasks, task
+        self.path = [None, None, None, None] # workspace, project, tasks, task
 
         readline.set_completer(self.complete)
         readline.set_completer_delims('')
@@ -49,14 +61,18 @@ class Shell(object):
 
     def display(self):
         pwd_len = len(self.pwd)
-        if pwd_len == 0:
-            for w in self.path[0]:
+        if pwd_len == self.WORKSPACES:
+            for w in self.path[self.WORKSPACES]:
                 print w['name']
-        elif pwd_len == 1:
-            for t in self.path[1]:
+        elif pwd_len == self.PROJECTS:
+            print 'me'
+            for p in self.path[self.PROJECTS]:
+                print p['name']
+        elif pwd_len == self.TASKS:
+            for t in self.path[self.TASKS]:
                 print t['name']
-        elif pwd_len == 2:
-            task = self.path[2]
+        elif pwd_len == self.TASK:
+            task = self.path[self.TASK]
             print task['name']
             if task['completed']:
                 print 'completed'
@@ -81,26 +97,38 @@ class Shell(object):
         if command == 'cl':
             if split[1] == '..':
                 self.pwd.pop()
-            elif pwd_len == 0:
-                for w in self.path[0]:
+            elif pwd_len == self.WORKSPACES:
+                for w in self.path[self.WORKSPACES]:
                     if w['name'] == split[1]:
                         self.pwd.append(w['id'])
-                        tasks = self.api.tasks(w['id'])
-                        self.path[1] = tasks
+                        projects = self.api.projects(w['id'])
+                        self.path[self.PROJECTS] = projects
                         break
                 else:
                     print 'could not find that workspace'
-            elif pwd_len == 1:
-                for t in self.path[1]:
+            elif pwd_len == self.PROJECTS:
+                if split[1] == 'me':
+                    self.pwd.append('me')
+                    tasks = self.api.tasks(workspace_id=self.pwd[0])
+                    self.path[self.TASKS] = tasks
+                else:
+                    for p in self.path[self.PROJECTS]:
+                        if p['name'] == split[1]:
+                            self.pwd.append(p['id'])
+                            tasks = self.api.tasks(project_id=p['id'])
+                            self.path[self.TASKS] = tasks
+                            break
+            elif pwd_len == self.TASKS:
+                for t in self.path[self.TASKS]:
                     if t['name'] == split[1]:
                         self.pwd.append(t['id'])
                         task = self.api.task(t['id'])
-                        self.path[2] = task
+                        self.path[self.TASK] = task
                         break
                 else:
                     print 'could not find that task'
-            elif pwd_len == 2:
-                pass
+            elif pwd_len == self.TASK:
+                return False
             else:
                 raise RuntimeError('unhandled working directory depth')
             return True
