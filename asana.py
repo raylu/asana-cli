@@ -39,10 +39,11 @@ class Shell(object):
         readline.parse_and_bind('tab: complete')
 
     def run(self):
+        self.display()
         try:
             while True:
-                self.display()
-                self.prompt()
+                if self.prompt():
+                    self.display()
         except EOFError:
             print
 
@@ -76,43 +77,50 @@ class Shell(object):
 
     def prompt(self):
         pwd_len = len(self.pwd)
-        command = raw_input(', '.join(map(str, self.pwd)) + '> ')
-        if pwd_len == 0:
-            w_name = command
-            for w in self.workspaces:
-                if w['name'] == w_name:
-                    self.pwd.append(w['id'])
-                    break
+        line = raw_input(', '.join(map(str, self.pwd)) + '> ')
+        split = line.split(' ', 1)
+        command = split[0]
+        if command == 'cl':
+            if pwd_len == 0:
+                for w in self.workspaces:
+                    if w['name'] == split[1]:
+                        self.pwd.append(w['id'])
+                        break
+                else:
+                    print 'could not find that workspace'
+            elif pwd_len == 1:
+                for t in self.tasks:
+                    if t['name'] == split[1]:
+                        self.pwd.append(t['id'])
+                        break
+                else:
+                    print 'could not find that task'
+            elif pwd_len == 2:
+                pass
             else:
-                print('could not find that workspace')
-        elif pwd_len == 1:
-            t_name = command
-            for t in self.tasks:
-                if t['name'] == t_name:
-                    self.pwd.append(t['id'])
-                    break
-            else:
-                print('could not find that task')
-        elif pwd_len == 2:
-            pass
+                raise RuntimeError('unhandled working directory depth')
+            return True
         else:
-            raise RuntimeError('unhandled working directory depth')
+            print 'unrecognized command'
+            return False
 
     def complete(self, text, state):
-        ltext = text.lower()
+        if not text.startswith('cl ') or len(text) < 4:
+            return
+        ltext = text[3:].lower()
         match = 0
         pwd_len = len(self.pwd)
         if pwd_len == 0:
             for w in self.workspaces:
                 if ltext in w['name'].lower():
                     if match == state:
-                        return w['name']
+                        return 'cl ' + w['name']
                     match += 1
         elif pwd_len == 1:
             for t in self.tasks:
                 if ltext in t['name'].lower():
                     if match == state:
-                        return t['name']
+                        return 'cl ' + t['name']
                     match += 1
 
 if __name__ == '__main__':
