@@ -31,14 +31,14 @@ class Shell(object):
     def __init__(self, api_key):
         self.api = API(api_key)
         self.pwd = []
-        self.path = []
+        self.path = [None, None, None] # workspace, tasks, task
 
         readline.set_completer(self.complete)
         readline.set_completer_delims('')
         readline.parse_and_bind('tab: complete')
 
     def run(self):
-        self.path.append(self.api.workspaces())
+        self.path[0] = self.api.workspaces()
         self.display()
         try:
             while True:
@@ -79,12 +79,14 @@ class Shell(object):
         split = line.split(' ', 1)
         command = split[0]
         if command == 'cl':
-            if pwd_len == 0:
+            if split[1] == '..':
+                self.pwd.pop()
+            elif pwd_len == 0:
                 for w in self.path[0]:
                     if w['name'] == split[1]:
                         self.pwd.append(w['id'])
                         tasks = self.api.tasks(w['id'])
-                        self.path.append(tasks)
+                        self.path[1] = tasks
                         break
                 else:
                     print 'could not find that workspace'
@@ -93,7 +95,7 @@ class Shell(object):
                     if t['name'] == split[1]:
                         self.pwd.append(t['id'])
                         task = self.api.task(t['id'])
-                        self.path.append(task)
+                        self.path[2] = task
                         break
                 else:
                     print 'could not find that task'
