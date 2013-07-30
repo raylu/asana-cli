@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 # vim: set sw=4 ts=4:
 
-from fabric import colors
 import fcntl
 import operator
 import os.path
-import requests
 import readline
 import struct
 import termios
+
+import requests
+from termcolor import colored
 
 class API(object):
     def __init__(self, api_key):
@@ -86,35 +87,36 @@ class Shell(object):
         elif pwd_len == self.TASKS:
             for t in self.path[self.TASKS]:
                 if t['completed']:
-                    print '\t' + colors.green(t['name'])
+                    print colored(u' \u2713 ', 'green'),
+                    print colored(t['name'], 'grey', attrs=['bold'])
                 elif t['name'].endswith(':'):
-                    print colors.yellow(t['name'])
+                    print colored(t['name'], 'yellow')
                 else:
-                    print '\t' + t['name']
+                    print '    ' + t['name']
         elif pwd_len == self.TASK:
             task = self.path[self.TASK]
-            print task['name']
+            print colored(task['name'], attrs=['bold'])
             if task['completed']:
-                print colors.green('completed')
+                print colored('completed', 'green', attrs=['bold'])
             if task['assignee']:
-                print colors.yellow('assignee:'), task['assignee']['name']
+                print colored('assignee:', 'yellow'), task['assignee']['name']
             else:
-                print colors.yellow('assignee:'), task['assignee']
-            print colors.yellow('notes:'), task['notes']
-            print colors.yellow('due on:'), task['due_on']
-            print colors.yellow('comments:')
+                print colored('assignee:', 'yellow'), task['assignee']
+            print colored('notes:', 'yellow'), task['notes']
+            print colored('due on:', 'yellow'), task['due_on']
+            print colored('comments:', 'yellow')
             for s in task['stories']:
                 if s['type'] == 'system':
                     line = '{} {} {}'.format(s['created_by']['name'], s['text'], s['created_at'])
-                    print colors.magenta(line)
+                    print colored(line, 'magenta')
                 elif s['type'] == 'comment':
-                    print colors.blue('{} {}'.format(s['created_by']['name'], s['created_at']))
-                    print '\t' + s['text']
+                    print colored('{} {}'.format(s['created_by']['name'], s['created_at']), 'blue')
+                    print '    ' + s['text']
                 else:
                     raise RuntimeError('unhandled story type: ' + s['type'])
-            print colors.yellow('followers:')
+            print colored('followers:', 'yellow')
             for f in task['followers']:
-                print '\t' + f['name']
+                print '    ' + f['name']
         else:
             raise RuntimeError('unhandled working directory depth')
 
@@ -134,7 +136,7 @@ class Shell(object):
     def prompt(self):
         pwd_len = len(self.pwd)
         prompt = ', '.join(map(str, self.pwd)) + '> '
-        line = raw_input(colors.cyan(prompt))
+        line = raw_input(colored(prompt, 'blue', attrs=['bold']))
         split = line.split(' ', 1)
         command = split[0]
         if command == 'cl':
