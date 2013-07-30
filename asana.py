@@ -114,14 +114,16 @@ class Shell(object):
         split = line.split(' ', 1)
         command = split[0]
         if command == 'cl':
-            if split[1] == '..':
+            if len(split) == 1:
+                print 'you must specify a "directory" to move to'
+                return False
+            elif split[1] == '..':
                 self.pwd.pop()
             elif pwd_len == self.WORKSPACES:
                 for w in self.path[self.WORKSPACES]:
                     if w['name'] == split[1]:
                         self.pwd.append(w['id'])
                         projects = self.api.projects(w['id'])
-                        print projects
                         self.path[self.PROJECTS] = projects
                         break
                 else:
