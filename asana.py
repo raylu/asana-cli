@@ -6,7 +6,9 @@ import operator
 import os.path
 import readline
 import struct
+import subprocess
 import termios
+import textwrap
 
 import requests
 from termcolor import colored
@@ -71,10 +73,10 @@ class Shell(object):
             print
 
     @staticmethod
-    def terminal_width():
+    def terminal_size():
         sizes = fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack('HHHH', 0, 0, 0, 0))
         height, width, _, _ = struct.unpack('HHHH', sizes)
-        return width
+        return height, width
 
     def display(self):
         pwd_len = len(self.pwd)
@@ -95,35 +97,51 @@ class Shell(object):
                     print '    ' + t['name']
         elif pwd_len == self.TASK:
             task = self.path[self.TASK]
-            print colored(task['name'], attrs=['bold'])
+            out = []
+            out.append(colored(task['name'], attrs=['bold']))
             if task['completed']:
-                print colored('completed', 'green', attrs=['bold'])
+                out.append(colored('completed', 'green', attrs=['bold']))
             if task['assignee']:
-                print colored('assignee:', 'yellow'), task['assignee']['name']
+                out.append(colored('assignee: ', 'yellow') + task['assignee']['name'])
             else:
-                print colored('assignee:', 'yellow'), task['assignee']
-            print colored('notes:', 'yellow'), task['notes']
-            print colored('due on:', 'yellow'), task['due_on']
-            print colored('comments:', 'yellow')
+                out.append(colored('assignee: ', 'yellow') + 'none')
+            out.append(colored('notes: ', 'yellow') + task['notes'])
+            if task['due_on']:
+                out.append(colored('due on: ', 'yellow') + task['due_on'])
+            terminal_height, terminal_width = self.terminal_size()
+            out.append(colored('comments:', 'yellow'))
             for s in task['stories']:
                 if s['type'] == 'system':
                     line = '{} {} {}'.format(s['created_by']['name'], s['text'], s['created_at'])
-                    print colored(line, 'magenta')
+                    out.append(colored(line, 'magenta'))
                 elif s['type'] == 'comment':
-                    print colored('{} {}'.format(s['created_by']['name'], s['created_at']), 'blue')
-                    print '    ' + s['text']
+                    out.append(colored('{} {}'.format(s['created_by']['name'], s['created_at']), 'blue'))
+                    for line in s['text'].splitlines():
+                        wrapped = textwrap.fill(line,
+                            min(terminal_width, 100), replace_whitespace=False,
+                            initial_indent='    ', subsequent_indent='    ')
+                        out.append(wrapped)
                 else:
                     raise RuntimeError('unhandled story type: ' + s['type'])
-            print colored('followers:', 'yellow')
+            out.append(colored('followers:', 'yellow'))
             for f in task['followers']:
-                print '    ' + f['name']
+                out.append('    ' + f['name'])
+
+            out_str = '\n'.join(out).encode('utf-8')
+            print out_str # always print to stdout
+            if out_str.count('\n') >= terminal_height: # there can be newlines in each element so we must count
+                less = subprocess.Popen(['less', '--RAW-CONTROL-CHARS'], stdin=subprocess.PIPE)
+                less.stdin.write(out_str)
+                less.stdin.close()
+                less.wait()
         else:
             raise RuntimeError('unhandled working directory depth')
 
     def print_col(self, strings):
         strings_len = len(strings)
         col_width = max(map(len, strings)) + 2
-        cols = max(self.terminal_width() / col_width, 1)
+        terminal_width = self.terminal_size()[1]
+        cols = max(terminal_width / col_width, 1)
         rows = max(strings_len / cols, 1)
         for r in xrange(rows):
             for c in xrange(cols):
