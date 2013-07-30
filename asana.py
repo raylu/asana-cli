@@ -2,10 +2,13 @@
 # vim: set sw=4 ts=4:
 
 from fabric import colors
+import fcntl
 import operator
 import os.path
 import requests
 import readline
+import struct
+import termios
 
 class API(object):
     def __init__(self, api_key):
@@ -22,7 +25,10 @@ class API(object):
     def workspaces(self):
         return self.__make_req('workspaces')
     def projects(self, workspace_id):
-        return self.__make_req('workspaces', str(workspace_id), 'projects')
+        projects = self.__make_req('workspaces', str(workspace_id), 'projects', opt_fields='name,archived,modified_at')
+        projects = filter(lambda p: not p['archived'], projects)
+        projects.sort(key=operator.itemgetter('modified_at'), reverse=True)
+        return projects
     def tasks(self, project_id=None, workspace_id=None):
         if project_id is not None:
             tasks = self.__make_req('projects', str(project_id), 'tasks', opt_fields='name,completed')
@@ -63,15 +69,20 @@ class Shell(object):
         except EOFError:
             print
 
+    @staticmethod
+    def terminal_width():
+        sizes = fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack('HHHH', 0, 0, 0, 0))
+        height, width, _, _ = struct.unpack('HHHH', sizes)
+        return width
+
     def display(self):
         pwd_len = len(self.pwd)
         if pwd_len == self.WORKSPACES:
-            for w in self.path[self.WORKSPACES]:
-                print w['name']
+            workspaces = map(operator.itemgetter('name'), self.path[self.WORKSPACES])
+            self.print_col(workspaces)
         elif pwd_len == self.PROJECTS:
-            print 'me'
-            for p in self.path[self.PROJECTS]:
-                print p['name']
+            projects = ['me'] + map(operator.itemgetter('name'), self.path[self.PROJECTS])
+            self.print_col(projects)
         elif pwd_len == self.TASKS:
             for t in self.path[self.TASKS]:
                 if t['completed']:
@@ -106,6 +117,19 @@ class Shell(object):
                 print '\t' + f['name']
         else:
             raise RuntimeError('unhandled working directory depth')
+
+    def print_col(self, strings):
+        strings_len = len(strings)
+        col_width = max(map(len, strings)) + 2
+        cols = max(self.terminal_width() / col_width, 1)
+        rows = max(strings_len / cols, 1)
+        for r in xrange(rows):
+            for c in xrange(cols):
+                index = c * rows + r
+                if index > strings_len - 1:
+                    break
+                print strings[index].ljust(col_width),
+            print
 
     def prompt(self):
         pwd_len = len(self.pwd)
