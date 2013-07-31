@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # vim: set sw=4 ts=4:
 
+from collections import defaultdict
 import fcntl
 import operator
 import os.path
@@ -35,13 +36,24 @@ class API(object):
         return projects
     def tasks(self, project_id=None, workspace_id=None):
         if project_id is not None:
-            tasks = self.__make_req('projects', str(project_id), 'tasks', opt_fields='name,completed')
+            tasks = self.__make_req('projects', str(project_id), 'tasks', opt_fields='name,completed,assignee_status')
         elif workspace_id is not None:
-            tasks = self.__make_req('workspaces', str(workspace_id), 'tasks', assignee='me', opt_fields='name,completed')
+            tasks = self.__make_req('workspaces', str(workspace_id), 'tasks', assignee='me', opt_fields='name,completed,assignee_status')
         else:
             raise ValueError('must pass one of project_id, workspace_id')
-        tasks.sort(key=operator.itemgetter('completed'), reverse=True)
-        return tasks
+        if project_id is not None:
+            tasks.sort(key=operator.itemgetter('completed'), reverse=True)
+            sorted_tasks = tasks
+        else:
+            by_status = defaultdict(list)
+            for t in tasks:
+                if t['completed']:
+                    by_status['completed'].append(t)
+                else:
+                    by_status[t['assignee_status']].append(t)
+            sorted_tasks = by_status['completed'] + by_status['inbox'] + \
+                by_status['today'] + by_status['upcoming'] + by_status['later']
+        return sorted_tasks
     def task(self, task_id):
         task = self.__make_req('tasks', str(task_id))
         stories = self.__make_req('tasks', str(task_id), 'stories')
@@ -89,14 +101,19 @@ class Shell(object):
             projects = ['me'] + map(operator.itemgetter('name'), self.path[self.PROJECTS])
             self.print_col(projects)
         elif pwd_len == self.TASKS:
+            last_status = None
             for t in self.path[self.TASKS]:
                 if t['completed']:
                     print colored(u' \u2713 ', 'green'),
                     print colored(t['name'], 'grey', attrs=['bold'])
-                elif t['name'].endswith(':'):
-                    print colored(t['name'], 'yellow')
                 else:
-                    print '    ' + t['name']
+                    if self.pwd[self.PROJECTS] == 'me' and t['assignee_status'] != last_status:
+                        print colored(t['assignee_status'], 'grey')
+                        last_status = t['assignee_status']
+                    if t['name'].endswith(':'):
+                        print colored(t['name'], 'yellow')
+                    else:
+                        print '    ' + t['name']
         elif pwd_len == self.TASK:
             task = self.path[self.TASK]
             out = []
