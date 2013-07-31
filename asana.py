@@ -154,8 +154,17 @@ class Shell(object):
             print
 
     def prompt(self):
-        prompt = ', '.join(map(str, self.pwd)) + '> '
-        line = raw_input(colored(prompt, 'blue', attrs=['bold']))
+        prompt = []
+        max_len = 12
+        for elem in self.pwd:
+            if elem == 'me':
+                prompt.append(elem)
+            elif len(elem['name']) > max_len:
+                prompt.append(elem['name'][:max_len-3] + u'\u2026')
+            else:
+                prompt.append(elem['name'])
+        prompt_str = (', '.join(prompt) + '> ').encode('utf-8')
+        line = raw_input(colored(prompt_str, 'blue', attrs=['bold']))
         pwd_len = len(self.pwd)
         split = line.split(' ', 1)
         command = split[0]
@@ -168,7 +177,7 @@ class Shell(object):
             elif pwd_len == self.WORKSPACES:
                 for w in self.path[self.WORKSPACES]:
                     if w['name'] == split[1]:
-                        self.pwd.append(w['id'])
+                        self.pwd.append(w)
                         projects = self.api.projects(w['id'])
                         self.path[self.PROJECTS] = projects
                         break
@@ -177,19 +186,19 @@ class Shell(object):
             elif pwd_len == self.PROJECTS:
                 if split[1] == 'me':
                     self.pwd.append('me')
-                    tasks = self.api.tasks(workspace_id=self.pwd[0])
+                    tasks = self.api.tasks(workspace_id=self.pwd[self.WORKSPACES]['id'])
                     self.path[self.TASKS] = tasks
                 else:
                     for p in self.path[self.PROJECTS]:
                         if p['name'] == split[1]:
-                            self.pwd.append(p['id'])
+                            self.pwd.append(p)
                             tasks = self.api.tasks(project_id=p['id'])
                             self.path[self.TASKS] = tasks
                             break
             elif pwd_len == self.TASKS:
                 for t in self.path[self.TASKS]:
                     if t['name'] == split[1]:
-                        self.pwd.append(t['id'])
+                        self.pwd.append(t)
                         task = self.api.task(t['id'])
                         self.path[self.TASK] = task
                         break
@@ -231,10 +240,16 @@ if __name__ == '__main__':
         url = sys.argv[1]
         path = map(int, url[22:].split('/'))
         workspace = shell.path[shell.WORKSPACES][path[0]]
-        shell.pwd.append(workspace['id'])
+        shell.pwd.append(workspace)
         shell.path[shell.PROJECTS] = shell.api.projects(workspace['id'])
-        shell.pwd.append(path[1])
-        shell.path[shell.TASKS] = shell.api.tasks(project_id=path[1])
-        shell.pwd.append(path[2])
-        shell.path[shell.TASK] = shell.api.task(path[2])
+        for p in shell.path[shell.PROJECTS]:
+            if p['id'] == path[shell.PROJECTS]:
+                shell.pwd.append(p)
+                shell.path[shell.TASKS] = shell.api.tasks(project_id=p['id'])
+                break
+        for t in shell.path[shell.TASKS]:
+            if t['id'] == path[shell.TASKS]:
+                shell.pwd.append(t)
+                shell.path[shell.TASK] = shell.api.task(t['id'])
+                break
     shell.run()
