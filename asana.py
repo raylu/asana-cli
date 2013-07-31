@@ -7,6 +7,7 @@ import os.path
 import readline
 import struct
 import subprocess
+import sys
 import termios
 import textwrap
 
@@ -62,8 +63,9 @@ class Shell(object):
         readline.set_completer_delims('')
         readline.parse_and_bind('tab: complete')
 
+        self.path[self.WORKSPACES] = self.api.workspaces()
+
     def run(self):
-        self.path[0] = self.api.workspaces()
         self.display()
         try:
             while True:
@@ -152,9 +154,9 @@ class Shell(object):
             print
 
     def prompt(self):
-        pwd_len = len(self.pwd)
         prompt = ', '.join(map(str, self.pwd)) + '> '
         line = raw_input(colored(prompt, 'blue', attrs=['bold']))
+        pwd_len = len(self.pwd)
         split = line.split(' ', 1)
         command = split[0]
         if command == 'cl':
@@ -224,4 +226,15 @@ if __name__ == '__main__':
         with open('api_key', 'w') as f:
             f.write(api_key)
         print('saved api_key\n')
-    Shell(api_key).run()
+    shell = Shell(api_key)
+    if len(sys.argv) > 1:
+        url = sys.argv[1]
+        path = map(int, url[22:].split('/'))
+        workspace = shell.path[shell.WORKSPACES][path[0]]
+        shell.pwd.append(workspace['id'])
+        shell.path[shell.PROJECTS] = shell.api.projects(workspace['id'])
+        shell.pwd.append(path[1])
+        shell.path[shell.TASKS] = shell.api.tasks(project_id=path[1])
+        shell.pwd.append(path[2])
+        shell.path[shell.TASK] = shell.api.task(path[2])
+    shell.run()
