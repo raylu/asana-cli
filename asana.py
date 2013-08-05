@@ -32,6 +32,8 @@ class API(object):
         return self.__make_req('get', path, params=params)
     def __put(self, *path, data):
         return self.__make_req('put', path, data=data)
+    def __post(self, *path, data):
+        return self.__make_req('post', path, data=data)
 
     def workspaces(self):
         return self.__get('workspaces')
@@ -68,6 +70,9 @@ class API(object):
         else:
             task = self.__put('tasks', str(task_id), data=put_data)
         return task
+    def stories(self, task_id, post_data):
+        story = self.__post('tasks', str(task_id), 'stories', data=post_data)
+        return story
 
 class Shell(object):
     WORKSPACES = 0
@@ -197,6 +202,8 @@ class Shell(object):
             return self.command_cl(split)
         elif command == 'done':
             return self.command_done(split)
+        elif command == 'comment':
+            return self.command_comment(split)
         else:
             print('unrecognized command')
             return False
@@ -256,6 +263,23 @@ class Shell(object):
         task = self.api.task(task['id'], put_data)
         task['stories'] = stories
         self.path[self.TASK] = task
+        return True
+
+    def command_comment(self, split):
+        filename = 'comment'
+        with open(filename, 'w') as f:
+            pass
+        editor = subprocess.Popen([os.environ['EDITOR'], filename])
+        editor.wait()
+        with open(filename, 'r') as f:
+            comment = f.read().strip()
+        os.unlink(filename)
+        if not comment:
+            print('ignoring empty comment')
+            return False
+        task = self.path[self.TASK]
+        story = self.api.stories(task['id'], {'text': comment})
+        task['stories'].append(story)
         return True
 
     def tab_complete(self, text, state):
