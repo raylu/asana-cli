@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # vim: set sw=4 ts=4:
 
 from collections import defaultdict
@@ -71,7 +71,7 @@ class Shell(object):
         self.pwd = []
         self.path = [None, None, None, None] # workspace, project, tasks, task
 
-        readline.set_completer(self.complete)
+        readline.set_completer(self.tab_complete)
         readline.set_completer_delims('')
         readline.parse_and_bind('tab: complete')
 
@@ -95,25 +95,25 @@ class Shell(object):
     def display(self):
         pwd_len = len(self.pwd)
         if pwd_len == self.WORKSPACES:
-            workspaces = map(operator.itemgetter('name'), self.path[self.WORKSPACES])
+            workspaces = list(map(operator.itemgetter('name'), self.path[self.WORKSPACES]))
             self.print_col(workspaces)
         elif pwd_len == self.PROJECTS:
-            projects = ['me'] + map(operator.itemgetter('name'), self.path[self.PROJECTS])
+            projects = ['me'] + list(map(operator.itemgetter('name'), self.path[self.PROJECTS]))
             self.print_col(projects)
         elif pwd_len == self.TASKS:
             last_status = None
             for t in self.path[self.TASKS]:
                 if t['completed']:
-                    print colored(u' \u2713 ', 'green'),
-                    print colored(t['name'], 'grey', attrs=['bold'])
+                    print(colored(' \u2713 ', 'green'), end='')
+                    print(colored(t['name'], 'grey', attrs=['bold']))
                 else:
                     if self.pwd[self.PROJECTS] == 'me' and t['assignee_status'] != last_status:
-                        print colored(t['assignee_status'], 'grey')
+                        print(colored(t['assignee_status'], 'grey'))
                         last_status = t['assignee_status']
                     if t['name'].endswith(':'):
-                        print colored(t['name'], 'yellow')
+                        print(colored(t['name'], 'yellow'))
                     else:
-                        print '    ' + t['name']
+                        print('    ' + t['name'])
         elif pwd_len == self.TASK:
             task = self.path[self.TASK]
             out = []
@@ -146,11 +146,11 @@ class Shell(object):
             for f in task['followers']:
                 out.append('    ' + f['name'])
 
-            out_str = '\n'.join(out).encode('utf-8')
-            print out_str # always print to stdout
+            out_str = '\n'.join(out)
+            print(out_str) # always print to stdout
             if out_str.count('\n') >= terminal_height: # there can be newlines in each element so we must count
                 less = subprocess.Popen(['less', '--RAW-CONTROL-CHARS'], stdin=subprocess.PIPE)
-                less.stdin.write(out_str)
+                less.stdin.write(out_str.encode('utf-8'))
                 less.stdin.close()
                 less.wait()
         else:
@@ -160,15 +160,15 @@ class Shell(object):
         strings_len = len(strings)
         col_width = max(map(len, strings)) + 2
         terminal_width = self.terminal_size()[1]
-        cols = max(terminal_width / col_width, 1)
-        rows = max(strings_len / cols, 1)
-        for r in xrange(rows):
-            for c in xrange(cols):
+        cols = max(terminal_width // col_width, 1)
+        rows = max(strings_len // cols, 1)
+        for r in range(rows):
+            for c in range(cols):
                 index = c * rows + r
                 if index > strings_len - 1:
                     break
-                print strings[index].ljust(col_width),
-            print
+                print(strings[index].ljust(col_width), end='')
+            print()
 
     def prompt(self):
         prompt = []
@@ -177,60 +177,63 @@ class Shell(object):
             if elem == 'me':
                 prompt.append(elem)
             elif len(elem['name']) > max_len:
-                prompt.append(elem['name'][:max_len-3] + u'\u2026')
+                prompt.append(elem['name'][:max_len-3] + '\u2026')
             else:
                 prompt.append(elem['name'])
-        prompt_str = (', '.join(prompt) + '> ').encode('utf-8')
-        line = raw_input(colored(prompt_str, 'blue', attrs=['bold']))
-        pwd_len = len(self.pwd)
+        prompt_str = (', '.join(prompt) + '> ')
+        line = input(colored(prompt_str, 'blue', attrs=['bold']))
         split = line.split(' ', 1)
         command = split[0]
         if command == 'cl':
-            if len(split) == 1:
-                print 'you must specify a "directory" to move to'
-                return False
-            elif split[1] == '..':
-                self.pwd.pop()
-            elif pwd_len == self.WORKSPACES:
-                for w in self.path[self.WORKSPACES]:
-                    if w['name'] == split[1]:
-                        self.pwd.append(w)
-                        projects = self.api.projects(w['id'])
-                        self.path[self.PROJECTS] = projects
-                        break
-                else:
-                    print 'could not find that workspace'
-            elif pwd_len == self.PROJECTS:
-                if split[1] == 'me':
-                    self.pwd.append('me')
-                    tasks = self.api.tasks(workspace_id=self.pwd[self.WORKSPACES]['id'])
-                    self.path[self.TASKS] = tasks
-                else:
-                    for p in self.path[self.PROJECTS]:
-                        if p['name'] == split[1]:
-                            self.pwd.append(p)
-                            tasks = self.api.tasks(project_id=p['id'])
-                            self.path[self.TASKS] = tasks
-                            break
-            elif pwd_len == self.TASKS:
-                for t in self.path[self.TASKS]:
-                    if t['name'] == split[1]:
-                        self.pwd.append(t)
-                        task = self.api.task(t['id'])
-                        self.path[self.TASK] = task
-                        break
-                else:
-                    print 'could not find that task'
-            elif pwd_len == self.TASK:
-                return False
-            else:
-                raise RuntimeError('unhandled working directory depth')
-            return True
+            return self.command_cl(split)
         else:
-            print 'unrecognized command'
+            print('unrecognized command')
             return False
 
-    def complete(self, text, state):
+    def command_cl(self, split):
+        pwd_len = len(self.pwd)
+        if len(split) == 1:
+            print('you must specify a "directory" to move to')
+            return False
+        elif split[1] == '..':
+            self.pwd.pop()
+        elif pwd_len == self.WORKSPACES:
+            for w in self.path[self.WORKSPACES]:
+                if w['name'] == split[1]:
+                    self.pwd.append(w)
+                    projects = self.api.projects(w['id'])
+                    self.path[self.PROJECTS] = projects
+                    break
+            else:
+                print('could not find that workspace')
+        elif pwd_len == self.PROJECTS:
+            if split[1] == 'me':
+                self.pwd.append('me')
+                tasks = self.api.tasks(workspace_id=self.pwd[self.WORKSPACES]['id'])
+                self.path[self.TASKS] = tasks
+            else:
+                for p in self.path[self.PROJECTS]:
+                    if p['name'] == split[1]:
+                        self.pwd.append(p)
+                        tasks = self.api.tasks(project_id=p['id'])
+                        self.path[self.TASKS] = tasks
+                        break
+        elif pwd_len == self.TASKS:
+            for t in self.path[self.TASKS]:
+                if t['name'] == split[1]:
+                    self.pwd.append(t)
+                    task = self.api.task(t['id'])
+                    self.path[self.TASK] = task
+                    break
+            else:
+                print('could not find that task')
+        elif pwd_len == self.TASK:
+            return False
+        else:
+            raise RuntimeError('unhandled working directory depth')
+        return True
+
+    def tab_complete(self, text, state):
         if not text.startswith('cl ') or len(text) < 4:
             return
         ltext = text[3:].lower()
