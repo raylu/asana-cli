@@ -16,29 +16,35 @@ import requests
 from termcolor import colored
 
 class API(object):
+    BASE_URL = 'https://app.asana.com/api/1.0/'
+
     def __init__(self, api_key):
         self.api_key = api_key
         self.rs = requests.Session()
 
-    def __make_req(self, *path, **params):
-        url = 'https://app.asana.com/api/1.0/' + '/'.join(path)
-        r = self.rs.get(url, params=params, auth=(self.api_key, '')).json()
+    def __make_req(self, verb, path, params=None, data=None):
+        url = self.BASE_URL + '/'.join(path)
+        r = self.rs.request(verb, url, params=params, data=data, auth=(self.api_key, '')).json()
         if 'errors' in r:
             raise Exception(r['errors'])
         return r['data']
+    def __get(self, *path, **params):
+        return self.__make_req('get', path, params=params)
+    def __put(self, *path, data):
+        return self.__make_req('put', path, data=data)
 
     def workspaces(self):
-        return self.__make_req('workspaces')
+        return self.__get('workspaces')
     def projects(self, workspace_id):
-        projects = self.__make_req('workspaces', str(workspace_id), 'projects', opt_fields='name,archived,modified_at')
-        projects = filter(lambda p: not p['archived'], projects)
+        projects = self.__get('workspaces', str(workspace_id), 'projects',
+                archived=False, opt_fields='name,archived,modified_at')
         projects.sort(key=operator.itemgetter('modified_at'), reverse=True)
         return projects
     def tasks(self, project_id=None, workspace_id=None):
         if project_id is not None:
-            tasks = self.__make_req('projects', str(project_id), 'tasks', opt_fields='name,completed,assignee_status')
+            tasks = self.__get('projects', str(project_id), 'tasks', opt_fields='name,completed,assignee_status')
         elif workspace_id is not None:
-            tasks = self.__make_req('workspaces', str(workspace_id), 'tasks', assignee='me', opt_fields='name,completed,assignee_status')
+            tasks = self.__get('workspaces', str(workspace_id), 'tasks', assignee='me', opt_fields='name,completed,assignee_status')
         else:
             raise ValueError('must pass one of project_id, workspace_id')
         if project_id is not None:
@@ -54,10 +60,13 @@ class API(object):
             sorted_tasks = by_status['completed'] + by_status['inbox'] + \
                 by_status['today'] + by_status['upcoming'] + by_status['later']
         return sorted_tasks
-    def task(self, task_id):
-        task = self.__make_req('tasks', str(task_id))
-        stories = self.__make_req('tasks', str(task_id), 'stories')
-        task['stories'] = stories
+    def task(self, task_id, put_data=None):
+        if put_data is None:
+            task = self.__get('tasks', str(task_id))
+            stories = self.__get('tasks', str(task_id), 'stories')
+            task['stories'] = stories
+        else:
+            task = self.__put('tasks', str(task_id), data=put_data)
         return task
 
 class Shell(object):
@@ -186,6 +195,8 @@ class Shell(object):
         command = split[0]
         if command == 'cl':
             return self.command_cl(split)
+        elif command == 'done':
+            return self.command_done(split)
         else:
             print('unrecognized command')
             return False
@@ -231,6 +242,20 @@ class Shell(object):
             return False
         else:
             raise RuntimeError('unhandled working directory depth')
+        return True
+
+    def command_done(self, split):
+        if len(self.pwd) != self.TASK:
+            print('must be on a task')
+            return False
+        task = self.path[self.TASK]
+        stories = task['stories']
+        put_data = {
+            'completed': not task['completed']
+        }
+        task = self.api.task(task['id'], put_data)
+        task['stories'] = stories
+        self.path[self.TASK] = task
         return True
 
     def tab_complete(self, text, state):
