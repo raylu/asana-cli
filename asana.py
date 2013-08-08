@@ -307,7 +307,7 @@ if __name__ == '__main__':
     shell = Shell(api_key)
     if len(sys.argv) > 1:
         url = sys.argv[1]
-        path = map(int, url[22:].split('/'))
+        path = list(map(int, url[22:].split('/')))
         workspace = shell.path[shell.WORKSPACES][path[0]]
         shell.pwd.append(workspace)
         shell.path[shell.PROJECTS] = shell.api.projects(workspace['id'])
