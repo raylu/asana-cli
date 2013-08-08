@@ -331,18 +331,25 @@ if __name__ == '__main__':
     shell = Shell(api_key)
     if len(sys.argv) > 1:
         url = sys.argv[1]
-        path = list(map(int, url[22:].split('/')))
-        workspace = shell.path[shell.WORKSPACES][path[0]]
-        shell.pwd.append(workspace)
-        shell.path[shell.PROJECTS] = shell.api.projects(workspace['id'])
-        for p in shell.path[shell.PROJECTS]:
-            if p['id'] == path[shell.PROJECTS]:
-                shell.pwd.append(p)
-                shell.path[shell.TASKS] = shell.api.tasks(project_id=p['id'])
-                break
-        for t in shell.path[shell.TASKS]:
-            if t['id'] == path[shell.TASKS]:
-                shell.pwd.append(t)
-                shell.path[shell.TASK] = shell.api.task(t['id'])
-                break
+        if url == 'me':
+            workspace = shell.path[shell.WORKSPACES][0]
+            shell.pwd.append(workspace)
+            shell.path[shell.PROJECTS] = shell.api.projects(workspace['id'])
+            shell.pwd.append('me')
+            shell.path[shell.TASKS] = shell.api.tasks(workspace_id=workspace['id'])
+        else:
+            path = list(map(int, url[22:].split('/')))
+            workspace = shell.path[shell.WORKSPACES][path[0]]
+            shell.pwd.append(workspace)
+            shell.path[shell.PROJECTS] = shell.api.projects(workspace['id'])
+            for p in shell.path[shell.PROJECTS]:
+                if p['id'] == path[shell.PROJECTS]:
+                    shell.pwd.append(p)
+                    shell.path[shell.TASKS] = shell.api.tasks(project_id=p['id'])
+                    break
+            for t in shell.path[shell.TASKS]:
+                if t['id'] == path[shell.TASKS]:
+                    shell.pwd.append(t)
+                    shell.path[shell.TASK] = shell.api.task(t['id'])
+                    break
     shell.run()
