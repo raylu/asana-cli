@@ -200,6 +200,8 @@ class Shell(object):
         command = split[0]
         if command == 'cl':
             return self.command_cl(split)
+        elif command == 'ls':
+            return self.command_ls(split)
         elif command == 'done':
             return self.command_done(split)
         elif command == 'comment':
@@ -247,6 +249,28 @@ class Shell(object):
                 print('could not find that task')
         elif pwd_len == self.TASK:
             return False
+        else:
+            raise RuntimeError('unhandled working directory depth')
+        return True
+
+    def command_ls(self, split):
+        pwd_len = len(self.pwd)
+        if pwd_len == self.WORKSPACES:
+            workspaces = self.api.workspaces()
+            self.path[self.WORKSPACES] = workspaces
+        elif pwd_len == self.PROJECTS:
+            projects = self.api.projects(self.pwd[self.WORKSPACES]['id'])
+            self.path[self.PROJECTS] = projects
+        elif pwd_len == self.TASKS:
+            project = self.pwd[self.PROJECTS]
+            if project == 'me':
+                tasks = self.api.tasks(workspace_id=self.pwd[self.WORKSPACES]['id'])
+            else:
+                tasks = self.api.tasks(project_id=project['id'])
+            self.path[self.TASKS] = tasks
+        elif pwd_len == self.TASK:
+            task = self.api.task(self.path[self.TASK]['id'])
+            self.path[self.TASK] = task
         else:
             raise RuntimeError('unhandled working directory depth')
         return True
