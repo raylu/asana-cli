@@ -331,13 +331,20 @@ if __name__ == '__main__':
     shell = Shell(api_key)
     if len(sys.argv) > 1:
         url = sys.argv[1]
-        if url == 'me':
-            workspace = shell.path[shell.WORKSPACES][0]
+        if url.endswith('me'): # "getclever.com/me" or "me"
+            workspace_name = url.rpartition('/')[0]
+            if workspace_name:
+                for w in shell.path[shell.WORKSPACES]:
+                    if workspace_name == w['name']:
+                        workspace = w
+                        break
+            else:
+                workspace = shell.path[shell.WORKSPACES][0]
             shell.pwd.append(workspace)
             shell.path[shell.PROJECTS] = shell.api.projects(workspace['id'])
             shell.pwd.append('me')
             shell.path[shell.TASKS] = shell.api.tasks(workspace_id=workspace['id'])
-        else:
+        else: # "https://app.asana.com/0/5605091247064/7186424131429"
             path = list(map(int, url[22:].split('/')))
             workspace = shell.path[shell.WORKSPACES][path[0]]
             shell.pwd.append(workspace)
